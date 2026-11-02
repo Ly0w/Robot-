@@ -1,0 +1,1331 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>El Robot Repartidor - Algoritmos y Secuencias</title>
+  
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            arcade: {
+              bg: '#0A0E17',
+              panel: '#121826',
+              card: '#1B2438',
+              border: '#2A364F',
+              cyan: '#00F0FF',
+              emerald: '#10B981',
+              purple: '#A855F7',
+              yellow: '#FACC15',
+              red: '#EF4444',
+            }
+          },
+          fontFamily: {
+            mono: ['ui-monospace', 'SFMono-Regular', 'Menlo', 'Monaco', 'Consolas', 'monospace'],
+          },
+          animation: {
+            'pulse-glow': 'pulseGlow 2s infinite',
+            'bounce-subtle': 'bounceSubtle 1.8s infinite',
+            'radar-sweep': 'radarSweep 3s linear infinite',
+          },
+          keyframes: {
+            pulseGlow: {
+              '0%, 100%': { opacity: '0.4', transform: 'scale(0.98)' },
+              '50%': { opacity: '0.9', transform: 'scale(1.05)' },
+            },
+            bounceSubtle: {
+              '0%, 100%': { transform: 'translateY(0)' },
+              '50%': { transform: 'translateY(-5px)' },
+            }
+          }
+        }
+      }
+    }
+  </script>
+
+  <style>
+    /* Prevent accidental text selection and touch delays on arcade controls */
+    .no-select {
+      user-select: none;
+      -webkit-user-select: none;
+      touch-action: manipulation;
+    }
+    
+    /* Custom Scrollbar for Code Timeline */
+    .timeline-scroll::-webkit-scrollbar {
+      height: 7px;
+    }
+    .timeline-scroll::-webkit-scrollbar-track {
+      background: rgba(10, 14, 23, 0.8);
+      border-radius: 9999px;
+    }
+    .timeline-scroll::-webkit-scrollbar-thumb {
+      background: #2A364F;
+      border-radius: 9999px;
+    }
+    .timeline-scroll::-webkit-scrollbar-thumb:hover {
+      background: #3B4D70;
+    }
+
+    /* Grid Cell Inner Shadow & Glow */
+    .cell-tech {
+      background: radial-gradient(circle at center, rgba(30, 41, 59, 0.5) 0%, rgba(15, 23, 42, 0.9) 100%);
+      box-shadow: inset 0 0 10px rgba(0, 240, 255, 0.04);
+    }
+
+    /* Robot Smooth Kinematics */
+    #robot-sprite {
+      transition: transform 0.38s cubic-bezier(0.34, 1.25, 0.64, 1);
+      will-change: transform;
+    }
+
+    /* Active code block highlight during execution */
+    .executing-block {
+      border-color: #00F0FF !important;
+      box-shadow: 0 0 18px rgba(0, 240, 255, 0.8), inset 0 0 8px rgba(0, 240, 255, 0.4);
+      transform: scale(1.08) translateY(-2px);
+      z-index: 20;
+    }
+
+    /* Robot eye scan line effect */
+    @keyframes scanEye {
+      0%, 100% { transform: scaleY(1); }
+      50% { transform: scaleY(0.2); }
+    }
+    .robot-blink {
+      animation: scanEye 4s infinite;
+    }
+  </style>
+</head>
+<body class="bg-arcade-bg text-slate-100 min-h-screen font-sans flex flex-col justify-between selection:bg-cyan-500 selection:text-black no-select">
+
+  <!-- Fullscreen Confetti Canvas (Pure JS Engine) -->
+  <canvas id="confetti-canvas" class="fixed inset-0 pointer-events-none z-50 w-full h-full"></canvas>
+
+  <!-- Navigation / Header -->
+  <header class="border-b border-arcade-border/80 bg-arcade-panel/90 backdrop-blur-md px-3 sm:px-6 py-2.5 sticky top-0 z-30 shadow-md">
+    <div class="max-w-6xl mx-auto flex flex-wrap items-center justify-between gap-2 sm:gap-4">
+      
+      <!-- Brand & Science Fair Tag -->
+      <div class="flex items-center space-x-2.5">
+        <div class="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-gradient-to-tr from-cyan-600 to-emerald-400 flex items-center justify-center text-xl sm:text-2xl shadow-lg shadow-cyan-500/25 border border-cyan-300/40">
+          🤖
+        </div>
+        <div>
+          <div class="flex items-center gap-2">
+            <h1 class="font-black text-base sm:text-lg tracking-tight bg-gradient-to-r from-cyan-300 via-teal-200 to-emerald-400 bg-clip-text text-transparent">
+              El Robot Repartidor
+            </h1>
+            <span class="text-[9px] sm:text-[10px] font-extrabold uppercase tracking-widest px-2 py-0.5 rounded-full bg-cyan-950 border border-cyan-500/40 text-cyan-400 shadow-sm">
+              Feria de Ciencias
+            </span>
+          </div>
+          <p class="text-[11px] sm:text-xs text-slate-400">Aprende qué es un <span class="text-cyan-400 font-semibold">Algoritmo</span> y una <span class="text-emerald-400 font-semibold">Secuencia</span></p>
+        </div>
+      </div>
+
+      <!-- Level Switcher & Utilities -->
+      <div class="flex items-center gap-1.5 sm:gap-2 flex-wrap">
+        <!-- Level Tabs -->
+        <div class="bg-arcade-bg/90 p-1 rounded-xl border border-arcade-border flex items-center gap-1 text-xs font-bold" id="level-tabs">
+          <button onclick="selectLevel(1)" id="tab-lvl-1" class="px-2 sm:px-2.5 py-1 rounded-lg transition-all bg-cyan-600 text-white shadow-sm">Nivel 1</button>
+          <button onclick="selectLevel(2)" id="tab-lvl-2" class="px-2 sm:px-2.5 py-1 rounded-lg transition-all text-slate-400 hover:text-slate-200">Nivel 2</button>
+          <button onclick="selectLevel(3)" id="tab-lvl-3" class="px-2 sm:px-2.5 py-1 rounded-lg transition-all text-slate-400 hover:text-slate-200">Nivel 3</button>
+          <button onclick="selectLevel(4)" id="tab-lvl-4" class="px-2 sm:px-2.5 py-1 rounded-lg transition-all text-slate-400 hover:text-slate-200">Nivel 4</button>
+        </div>
+
+        <!-- Pedagogy Modal Button -->
+        <button onclick="toggleModal('info-modal', true)" class="px-2.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs font-bold flex items-center gap-1 text-cyan-300 transition-colors shadow-sm">
+          <span>💡</span> <span class="hidden md:inline">¿Qué aprendemos?</span>
+        </button>
+
+        <!-- Sound Synthesizer Toggle -->
+        <button id="sound-btn" onclick="toggleSound()" class="p-1.5 sm:p-2 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-sm text-slate-200 transition-colors" title="Sonido Síntesis On/Off">
+          🔊
+        </button>
+      </div>
+
+    </div>
+  </header>
+
+  <!-- Main Game Playground Container -->
+  <main class="max-w-6xl mx-auto w-full p-2.5 sm:p-4 md:p-6 flex-1 flex flex-col justify-center">
+    
+    <!-- Mission Banner -->
+    <div class="mb-3 sm:mb-4 bg-arcade-panel/90 border border-arcade-border rounded-2xl p-3 sm:p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5 shadow-xl">
+      <div class="flex items-center gap-3">
+        <span class="text-2xl sm:text-3xl p-1 rounded-xl bg-slate-800/80 border border-slate-700/60" id="level-icon">🌱</span>
+        <div>
+          <div class="flex items-center gap-2 flex-wrap">
+            <span class="text-xs sm:text-sm uppercase tracking-wider font-extrabold text-cyan-400" id="level-name">Nivel 1: Línea Recta</span>
+            <span class="text-[10px] px-2 py-0.5 rounded-md bg-slate-800/80 text-emerald-400 font-mono border border-slate-700" id="level-difficulty">Dificultad: Inicial</span>
+          </div>
+          <p class="text-xs sm:text-sm text-slate-300 mt-0.5" id="level-desc">
+            Crea la secuencia para que el robot avance en línea recta hasta la batería 🔋.
+          </p>
+        </div>
+      </div>
+      
+      <!-- Live Status Pill & Quick Reset -->
+      <div class="flex items-center gap-2 self-end sm:self-center">
+        <div id="status-pill" class="flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold bg-cyan-950/70 border border-cyan-800/80 text-cyan-300 shadow-sm">
+          <span class="w-2 h-2 rounded-full bg-cyan-400 animate-pulse"></span>
+          <span id="status-text">Esperando instrucciones</span>
+        </div>
+        <button onclick="resetRobotToStart()" class="p-1.5 sm:p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-xs font-bold transition-all border border-slate-700 shadow-sm" title="Reiniciar Robot al Inicio">
+          🔄
+        </button>
+      </div>
+    </div>
+
+    <!-- Playground Layout: Grid + Controls -->
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-3 sm:gap-5 items-start">
+      
+      <!-- LEFT COLUMN: 5x5 Grid Board (6 cols) -->
+      <div class="lg:col-span-6 flex flex-col items-center">
+        <div class="w-full max-w-[370px] sm:max-w-[420px] aspect-square relative bg-slate-950 p-2 sm:p-3 rounded-2xl border-2 border-arcade-border shadow-2xl shadow-cyan-950/20">
+          
+          <!-- Board Grid Container (5x5 cells) -->
+          <div id="grid-container" class="w-full h-full grid grid-cols-5 grid-rows-5 gap-1.5 relative">
+            <!-- Grid cells generated dynamically via JS -->
+          </div>
+
+          <!-- Dynamic Robot Actor Layer -->
+          <div id="robot-layer" class="absolute inset-2 sm:inset-3 pointer-events-none">
+            <div id="robot-sprite" class="w-1/5 h-1/5 absolute top-0 left-0 flex items-center justify-center p-1" style="transform: translate(0%, 0%) rotate(0deg);">
+              <div class="w-full h-full rounded-2xl bg-gradient-to-b from-cyan-400 via-cyan-500 to-blue-600 border-2 border-cyan-200 shadow-lg shadow-cyan-500/60 flex flex-col items-center justify-center relative transform transition-transform">
+                
+                <!-- Direction Pointer Arrow at Top (Rotates with robot) -->
+                <div class="absolute -top-2 flex flex-col items-center">
+                  <div class="w-0 h-0 border-l-[7px] border-l-transparent border-r-[7px] border-r-transparent border-b-[9px] border-b-yellow-300 filter drop-shadow-[0_0_5px_#FACC15]"></div>
+                </div>
+
+                <!-- Cute Robot Antenna -->
+                <div class="w-1 h-1.5 bg-cyan-200 rounded-t-full -mt-0.5 mb-0.5"></div>
+
+                <!-- Expressive Robot Screen / Eyes -->
+                <div class="w-4/5 py-1 px-1.5 rounded-lg bg-slate-950 border border-cyan-400/50 flex items-center justify-center gap-1.5 shadow-inner">
+                  <!-- Left Eye -->
+                  <div class="w-2 h-2 rounded-full bg-cyan-300 flex items-center justify-center robot-blink shadow-[0_0_6px_#00F0FF]">
+                    <div class="w-0.5 h-0.5 rounded-full bg-slate-950"></div>
+                  </div>
+                  <!-- Right Eye -->
+                  <div class="w-2 h-2 rounded-full bg-cyan-300 flex items-center justify-center robot-blink shadow-[0_0_6px_#00F0FF]">
+                    <div class="w-0.5 h-0.5 rounded-full bg-slate-950"></div>
+                  </div>
+                </div>
+
+                <!-- Friendly Mouth Indicator -->
+                <div class="w-3 h-0.5 bg-cyan-200/90 rounded-full mt-1"></div>
+              </div>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- Visual Legend -->
+        <div class="flex items-center justify-center gap-3 sm:gap-4 text-xs text-slate-400 mt-2.5 sm:mt-3 flex-wrap">
+          <div class="flex items-center gap-1.5">
+            <span class="w-3 h-3 rounded bg-cyan-500 inline-block shadow-sm"></span>
+            <span class="font-medium text-slate-300">Robot (Tú)</span>
+          </div>
+          <div class="flex items-center gap-1.5">
+            <span class="text-base">🔋</span>
+            <span class="font-medium text-slate-300">Meta (Batería)</span>
+          </div>
+          <div class="flex items-center gap-1.5">
+            <span class="text-base">📦</span>
+            <span class="font-medium text-slate-300">Obstáculo</span>
+          </div>
+          <div class="flex items-center gap-1.5">
+            <span class="w-2 h-2 rounded-full bg-cyan-400/50 inline-block"></span>
+            <span class="font-medium text-slate-300">Ruta</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- RIGHT COLUMN: Timeline & Command Palette (6 cols) -->
+      <div class="lg:col-span-6 flex flex-col gap-3 sm:gap-4">
+        
+        <!-- Code Timeline Panel -->
+        <div class="bg-arcade-panel/90 border border-arcade-border rounded-2xl p-3 sm:p-4 shadow-xl">
+          <div class="flex items-center justify-between mb-2">
+            <div class="flex items-center gap-2">
+              <span class="text-cyan-400 text-xs sm:text-sm font-mono font-bold tracking-tight"># Algoritmo en Construcción</span>
+              <span id="instruction-count" class="text-[10px] sm:text-[11px] font-mono px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 border border-slate-700">0 / 16 bloques</span>
+            </div>
+            <span class="text-[10px] sm:text-[11px] text-slate-400 font-mono hidden sm:inline">Paso a Paso</span>
+          </div>
+
+          <!-- Horizontal Timeline Scroll Track -->
+          <div id="timeline-container" class="timeline-scroll w-full min-h-[76px] bg-slate-950/90 rounded-xl border border-dashed border-arcade-border p-2.5 flex items-center gap-2 overflow-x-auto relative">
+            <!-- Dynamically populated via updateTimelineUI() -->
+          </div>
+
+          <!-- Timeline Helper / Quick Edit Actions -->
+          <div class="flex items-center justify-between gap-2 mt-2 pt-2 border-t border-slate-800/80">
+            <span class="text-[10px] sm:text-[11px] text-slate-500 italic">💡 Toca cualquier bloque para quitarlo</span>
+            <div class="flex items-center gap-1.5 sm:gap-2">
+              <button id="btn-delete" onclick="removeLastCommand()" class="px-2.5 py-1 text-xs rounded-lg bg-slate-800 hover:bg-red-950/50 text-slate-300 hover:text-red-400 border border-slate-700 hover:border-red-800/60 flex items-center gap-1 transition-all">
+                <span>⌫</span> <span>Borrar Último</span>
+              </button>
+              <button id="btn-clear" onclick="clearCommands()" class="px-2.5 py-1 text-xs rounded-lg bg-slate-800 hover:bg-red-950/50 text-slate-300 hover:text-red-400 border border-slate-700 hover:border-red-800/60 flex items-center gap-1 transition-all">
+                <span>🗑️</span> <span>Limpiar</span>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Controls Palette (Touch Friendly Buttons) -->
+        <div class="bg-arcade-panel/90 border border-arcade-border rounded-2xl p-3 sm:p-4 shadow-xl">
+          <div class="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2.5 flex items-center justify-between">
+            <span>Comandos Disponibles</span>
+            <span class="text-[10px] text-cyan-400 font-mono">Toca para agregar a la fila</span>
+          </div>
+
+          <div class="grid grid-cols-3 gap-2 sm:gap-3">
+            <!-- Turn Left Button -->
+            <button id="cmd-turn-left" onclick="addCommand('turn-left')" class="cmd-btn group relative p-2.5 sm:p-3 rounded-xl bg-slate-800 hover:bg-slate-750 active:scale-95 border-2 border-slate-700 hover:border-purple-500/80 transition-all text-center flex flex-col items-center justify-center gap-1 shadow-md hover:shadow-purple-500/20 cursor-pointer">
+              <div class="text-2xl sm:text-3xl transition-transform group-hover:-rotate-45">↺</div>
+              <span class="text-xs sm:text-sm font-bold text-slate-200 group-hover:text-purple-300">Girar Izq.</span>
+              <span class="text-[9px] sm:text-[10px] text-slate-400 font-mono">90° izquierda</span>
+            </button>
+
+            <!-- Move Forward Button -->
+            <button id="cmd-move" onclick="addCommand('forward')" class="cmd-btn group relative p-2.5 sm:p-3 rounded-xl bg-gradient-to-b from-emerald-600/90 to-emerald-800/90 hover:from-emerald-500 hover:to-emerald-700 active:scale-95 border-2 border-emerald-400/80 transition-all text-center flex flex-col items-center justify-center gap-1 shadow-lg shadow-emerald-950/40 cursor-pointer">
+              <div class="text-2xl sm:text-3xl transition-transform group-hover:-translate-y-1">⬆️</div>
+              <span class="text-xs sm:text-sm font-extrabold text-white">Avanzar</span>
+              <span class="text-[9px] sm:text-[10px] text-emerald-200/90 font-mono">1 casilla</span>
+            </button>
+
+            <!-- Turn Right Button -->
+            <button id="cmd-turn-right" onclick="addCommand('turn-right')" class="cmd-btn group relative p-2.5 sm:p-3 rounded-xl bg-slate-800 hover:bg-slate-750 active:scale-95 border-2 border-slate-700 hover:border-yellow-500/80 transition-all text-center flex flex-col items-center justify-center gap-1 shadow-md hover:shadow-yellow-500/20 cursor-pointer">
+              <div class="text-2xl sm:text-3xl transition-transform group-hover:rotate-45">↻</div>
+              <span class="text-xs sm:text-sm font-bold text-slate-200 group-hover:text-yellow-300">Girar Der.</span>
+              <span class="text-[9px] sm:text-[10px] text-slate-400 font-mono">90° derecha</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Master Execution & Speed Controls -->
+        <div class="bg-gradient-to-r from-arcade-panel to-slate-950 border border-arcade-border rounded-2xl p-3 sm:p-4 shadow-xl flex flex-col sm:flex-row items-center gap-3">
+          
+          <!-- Run / Stop Toggle Button -->
+          <button id="run-btn" onclick="handleRunButton()" class="w-full sm:flex-1 py-3 sm:py-3.5 px-4 sm:px-6 rounded-xl bg-gradient-to-r from-cyan-500 via-teal-400 to-emerald-500 hover:from-cyan-400 hover:to-emerald-400 text-slate-950 font-black text-sm sm:text-base tracking-wide uppercase shadow-lg shadow-cyan-500/30 flex items-center justify-center gap-2 transition-all active:scale-95 cursor-pointer">
+            <span class="text-lg sm:text-xl" id="run-btn-icon">🚀</span>
+            <span id="run-btn-label">¡EJECUTAR CÓDIGO!</span>
+          </button>
+
+          <!-- Execution Speed Toggle -->
+          <div class="flex items-center gap-1.5 self-center bg-slate-950 p-1 rounded-xl border border-slate-800 text-xs shadow-inner">
+            <span class="text-[10px] text-slate-400 px-1 font-mono">Vel:</span>
+            <button onclick="setSpeed(550)" id="spd-1" class="px-2.5 py-1 rounded-lg bg-cyan-700 text-white font-bold transition-all">Normal</button>
+            <button onclick="setSpeed(300)" id="spd-2" class="px-2.5 py-1 rounded-lg text-slate-400 hover:text-white font-bold transition-all">Rápido</button>
+          </div>
+        </div>
+
+      </div>
+
+    </div>
+
+  </main>
+
+  <!-- Science Fair Concept Note Footer -->
+  <footer class="border-t border-arcade-border/80 bg-slate-950/70 px-4 py-2.5 text-center text-xs text-slate-400">
+    <div class="max-w-6xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-1.5">
+      <p>🧠 <strong class="text-slate-300">Regla de Oro:</strong> Las computadoras no improvisan; ejecutan cada orden de tu algoritmo en el orden exacto.</p>
+      <p class="font-mono text-[11px] text-cyan-400/90 font-semibold">Feria de Ciencias • Pensamiento Computacional</p>
+    </div>
+  </footer>
+
+  <!-- ================= EDUCATIONAL MODALS ================= -->
+
+  <!-- Modal 1: Educational Guide ("¿Qué estás aprendiendo?") -->
+  <div id="info-modal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
+    <div class="bg-arcade-panel border border-slate-700 max-w-lg w-full rounded-2xl p-5 sm:p-6 shadow-2xl relative">
+      <button onclick="toggleModal('info-modal', false)" class="absolute top-4 right-4 text-slate-400 hover:text-white text-xl p-1" title="Cerrar">✕</button>
+      
+      <div class="flex items-center gap-3 mb-4">
+        <div class="text-3xl p-2 rounded-xl bg-cyan-950 border border-cyan-800 shadow-md">💡</div>
+        <div>
+          <h2 class="text-lg sm:text-xl font-black text-white">¿Qué estás aprendiendo aquí?</h2>
+          <p class="text-xs text-cyan-400 font-mono">Los 3 pilares de la programación en 60 segundos</p>
+        </div>
+      </div>
+
+      <div class="space-y-2.5 text-xs sm:text-sm text-slate-300">
+        <div class="p-3 rounded-xl bg-slate-950/70 border border-slate-800">
+          <div class="font-bold text-emerald-400 flex items-center gap-2">
+            <span>1. Algoritmo</span>
+          </div>
+          <p class="text-xs text-slate-300 mt-1 leading-relaxed">
+            Es una <strong>secuencia ordenada de instrucciones</strong> para resolver un problema o lograr un objetivo. ¡Igual que una receta para cocinar o armar un mueble!
+          </p>
+        </div>
+
+        <div class="p-3 rounded-xl bg-slate-950/70 border border-slate-800">
+          <div class="font-bold text-cyan-400 flex items-center gap-2">
+            <span>2. Secuencia Lógica</span>
+          </div>
+          <p class="text-xs text-slate-300 mt-1 leading-relaxed">
+            <strong>El orden de los pasos importa.</strong> Si giras antes de avanzar, el robot termina en un destino totalmente distinto.
+          </p>
+        </div>
+
+        <div class="p-3 rounded-xl bg-slate-950/70 border border-slate-800">
+          <div class="font-bold text-purple-400 flex items-center gap-2">
+            <span>3. Bug y Depuración (Debugging)</span>
+          </div>
+          <p class="text-xs text-slate-300 mt-1 leading-relaxed">
+            Un <strong>bug</strong> es un error en las instrucciones. La máquina no se equivoca; solo hace exactamente lo que escribiste. <strong>Depurar</strong> es encontrar el error y corregirlo.
+          </p>
+        </div>
+      </div>
+
+      <button onclick="toggleModal('info-modal', false)" class="w-full mt-4 py-2.5 rounded-xl bg-cyan-600 hover:bg-cyan-500 font-bold text-white text-sm transition-colors shadow-lg shadow-cyan-600/30">
+        ¡Entendido, vamos a programar! 🚀
+      </button>
+    </div>
+  </div>
+
+  <!-- Modal 2: Pedagogical Bug Detected ("Bug Detectado en la Secuencia") -->
+  <div id="bug-modal" class="fixed inset-0 bg-slate-950/85 backdrop-blur-md z-50 flex items-center justify-center p-4 hidden">
+    <div class="bg-arcade-panel border-2 border-red-500/80 max-w-md w-full rounded-2xl p-5 sm:p-6 shadow-2xl shadow-red-950/50 relative text-center">
+      
+      <div class="w-16 h-16 rounded-2xl bg-red-950/80 border border-red-500/60 mx-auto flex items-center justify-center text-4xl mb-3 shadow-lg">
+        🐞
+      </div>
+
+      <div class="inline-block px-3 py-1 rounded-full bg-red-950 border border-red-700/60 text-[11px] font-mono font-bold text-red-400 uppercase tracking-wider mb-2">
+        ¡Bug Detectado en la Secuencia!
+      </div>
+
+      <h2 class="text-lg sm:text-xl font-black text-white" id="bug-title">¡El robot no pudo completar la misión!</h2>
+      
+      <div class="p-3.5 rounded-xl bg-slate-950/80 border border-slate-800 my-3.5 text-xs text-slate-300 leading-relaxed text-left" id="bug-explanation">
+        <!-- Filled dynamically -->
+      </div>
+
+      <div class="p-3 rounded-xl bg-cyan-950/40 border border-cyan-800/40 text-left text-xs text-cyan-200 mb-4">
+        <span class="font-bold text-cyan-300">💡 Lección de Programación:</span>
+        <p class="mt-0.5 text-slate-300">¡Los errores son parte de aprender a programar! Tu código queda intacto en la barra: quita o agrega los bloques necesarios y vuelve a probar.</p>
+      </div>
+
+      <div class="flex items-center gap-2">
+        <button onclick="dismissBugModal()" class="w-full py-3 rounded-xl bg-red-600 hover:bg-red-500 text-white font-bold text-sm transition-colors shadow-lg shadow-red-600/30 flex items-center justify-center gap-2">
+          <span>🔧</span> <span>Corregir Secuencia (Depurar)</span>
+        </button>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Modal 3: Pedagogical Victory ("¡Misión Cumplida! 🎉") -->
+  <div id="win-modal" class="fixed inset-0 bg-slate-950/85 backdrop-blur-md z-50 flex items-center justify-center p-4 hidden">
+    <div class="bg-arcade-panel border-2 border-emerald-500/80 max-w-md w-full rounded-2xl p-5 sm:p-6 shadow-2xl shadow-emerald-950/50 relative text-center">
+      
+      <div class="w-16 h-16 rounded-2xl bg-emerald-950/80 border border-emerald-500/60 mx-auto flex items-center justify-center text-4xl mb-3 shadow-lg animate-bounce-subtle">
+        🎉
+      </div>
+
+      <div class="inline-block px-3 py-1 rounded-full bg-emerald-950 border border-emerald-700/60 text-[11px] font-mono font-bold text-emerald-400 uppercase tracking-wider mb-2">
+        ¡Misión Cumplida con Éxito!
+      </div>
+
+      <h2 class="text-xl sm:text-2xl font-black text-white">¡Algoritmo Correcto!</h2>
+      
+      <div class="p-3.5 rounded-xl bg-slate-950/80 border border-slate-800 my-3.5 text-xs text-slate-300 leading-relaxed text-left">
+        <p class="mb-2">
+          🌟 <strong>¿Viste lo que lograste?</strong> Diseñaste una secuencia de <span id="win-step-count" class="text-emerald-400 font-bold">X pasos</span> ordenados lógicamente que resolvieron el desafío sin fallos.
+        </p>
+        <p class="text-slate-400">
+          En el mundo real, los autos autónomos, los robots de almacenes y los rovers espaciales en Marte navegan usando este mismo principio algorítmico.
+        </p>
+      </div>
+
+      <div class="flex flex-col sm:flex-row items-center gap-2">
+        <button onclick="replayCurrentLevel()" class="w-full sm:w-auto px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs border border-slate-700 transition-colors">
+          🔄 Repetir Nivel
+        </button>
+        <button id="next-level-btn" onclick="nextLevel()" class="w-full sm:flex-1 py-3 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 text-slate-950 font-black text-sm uppercase tracking-wider transition-all shadow-lg shadow-emerald-500/30 flex items-center justify-center gap-1.5">
+          <span>Siguiente Nivel</span> <span>➡️</span>
+        </button>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ================= JAVASCRIPT GAME ENGINE ================= -->
+  <script>
+    /* =========================================================
+       1. SYNTHETIC AUDIO ENGINE (Web Audio API)
+       Self-contained, ultra-responsive, zero external latency
+       ========================================================= */
+    class WebAudioSynth {
+      constructor() {
+        this.ctx = null;
+        this.enabled = true;
+        this.musicalScale = [261.63, 293.66, 329.63, 392.00, 440.00, 523.25, 587.33, 659.25];
+      }
+
+      ensureContext() {
+        if (!this.ctx) {
+          const AudioCtxClass = window.AudioContext || window.webkitAudioContext;
+          if (AudioCtxClass) {
+            this.ctx = new AudioCtxClass();
+          }
+        }
+        if (this.ctx && this.ctx.state === 'suspended') {
+          this.ctx.resume();
+        }
+      }
+
+      toggle() {
+        this.enabled = !this.enabled;
+        return this.enabled;
+      }
+
+      // Add instruction note (cheerful ascending synth chime)
+      playAddNote(index = 0) {
+        if (!this.enabled) return;
+        this.ensureContext();
+        if (!this.ctx) return;
+
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        const freq = this.musicalScale[index % this.musicalScale.length] * (index >= 8 ? 2 : 1);
+
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(freq, this.ctx.currentTime);
+
+        gain.gain.setValueAtTime(0.2, this.ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + 0.16);
+
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+
+        osc.start();
+        osc.stop(this.ctx.currentTime + 0.18);
+      }
+
+      // Delete block blip
+      playRemoveNote() {
+        if (!this.enabled) return;
+        this.ensureContext();
+        if (!this.ctx) return;
+
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(320, this.ctx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(140, this.ctx.currentTime + 0.12);
+
+        gain.gain.setValueAtTime(0.18, this.ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + 0.12);
+
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+
+        osc.start();
+        osc.stop(this.ctx.currentTime + 0.13);
+      }
+
+      // Move Forward (energetic robot footstep boop)
+      playMove() {
+        if (!this.enabled) return;
+        this.ensureContext();
+        if (!this.ctx) return;
+
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(440, this.ctx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(800, this.ctx.currentTime + 0.12);
+
+        gain.gain.setValueAtTime(0.24, this.ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + 0.14);
+
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+
+        osc.start();
+        osc.stop(this.ctx.currentTime + 0.15);
+      }
+
+      // Turn 90° (mechanical servo rotation sound)
+      playTurn() {
+        if (!this.enabled) return;
+        this.ensureContext();
+        if (!this.ctx) return;
+
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(650, this.ctx.currentTime);
+        osc.frequency.linearRampToValueAtTime(280, this.ctx.currentTime + 0.12);
+
+        gain.gain.setValueAtTime(0.14, this.ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + 0.13);
+
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+
+        osc.start();
+        osc.stop(this.ctx.currentTime + 0.14);
+      }
+
+      // Bug buzzer (8-bit descending glitch sound)
+      playBug() {
+        if (!this.enabled) return;
+        this.ensureContext();
+        if (!this.ctx) return;
+
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(180, this.ctx.currentTime);
+        osc.frequency.setValueAtTime(120, this.ctx.currentTime + 0.1);
+        osc.frequency.setValueAtTime(80, this.ctx.currentTime + 0.22);
+
+        gain.gain.setValueAtTime(0.3, this.ctx.currentTime);
+        gain.gain.linearRampToValueAtTime(0.01, this.ctx.currentTime + 0.38);
+
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+
+        osc.start();
+        osc.stop(this.ctx.currentTime + 0.4);
+      }
+
+      // Victory fanfare arpeggio (C5 - E5 - G5 - C6)
+      playVictory() {
+        if (!this.enabled) return;
+        this.ensureContext();
+        if (!this.ctx) return;
+
+        const notes = [523.25, 659.25, 783.99, 1046.50];
+        notes.forEach((freq, idx) => {
+          const osc = this.ctx.createOscillator();
+          const gain = this.ctx.createGain();
+
+          osc.type = 'triangle';
+          osc.frequency.setValueAtTime(freq, this.ctx.currentTime + idx * 0.11);
+
+          gain.gain.setValueAtTime(0.001, this.ctx.currentTime + idx * 0.11);
+          gain.gain.linearRampToValueAtTime(0.26, this.ctx.currentTime + idx * 0.11 + 0.02);
+          gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + idx * 0.11 + 0.42);
+
+          osc.connect(gain);
+          gain.connect(this.ctx.destination);
+
+          osc.start(this.ctx.currentTime + idx * 0.11);
+          osc.stop(this.ctx.currentTime + idx * 0.11 + 0.46);
+        });
+      }
+    }
+
+    const synth = new WebAudioSynth();
+
+    // Unlock Web Audio immediately on first user gesture
+    window.addEventListener('pointerdown', () => synth.ensureContext(), { once: true });
+
+    function toggleSound() {
+      const active = synth.toggle();
+      const btn = document.getElementById('sound-btn');
+      btn.innerText = active ? '🔊' : '🔇';
+      btn.classList.toggle('text-red-400', !active);
+    }
+
+    /* =========================================================
+       2. CANVAS CONFETTI GENERATOR (Pure Vanilla JS)
+       100% offline-ready: perfect for science fairs with no WiFi
+       ========================================================= */
+    class CanvasConfetti {
+      constructor(canvasId) {
+        this.canvas = document.getElementById(canvasId);
+        this.ctx = this.canvas.getContext('2d');
+        this.particles = [];
+        this.active = false;
+        this.resize();
+        window.addEventListener('resize', () => this.resize());
+      }
+
+      resize() {
+        this.canvas.width = window.innerWidth;
+        this.canvas.height = window.innerHeight;
+      }
+
+      burst() {
+        this.resize();
+        this.particles = [];
+        const colors = ['#00F0FF', '#10B981', '#FACC15', '#A855F7', '#EF4444', '#38BDF8', '#FFFFFF'];
+        const count = 95;
+
+        for (let i = 0; i < count; i++) {
+          this.particles.push({
+            x: this.canvas.width * (0.35 + Math.random() * 0.3),
+            y: this.canvas.height * 0.45,
+            vx: (Math.random() - 0.5) * 16,
+            vy: -Math.random() * 13 - 4,
+            size: Math.random() * 8 + 4,
+            color: colors[Math.floor(Math.random() * colors.length)],
+            rotation: Math.random() * 360,
+            rotationSpeed: (Math.random() - 0.5) * 14,
+            opacity: 1,
+            gravity: 0.38 + Math.random() * 0.14
+          });
+        }
+
+        if (!this.active) {
+          this.active = true;
+          this.animate();
+        }
+      }
+
+      animate() {
+        if (!this.active) return;
+        this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+
+        let liveCount = 0;
+        for (let p of this.particles) {
+          p.x += p.vx;
+          p.y += p.vy;
+          p.vy += p.gravity;
+          p.vx *= 0.98;
+          p.rotation += p.rotationSpeed;
+          p.opacity -= 0.009;
+
+          if (p.opacity > 0 && p.y < this.canvas.height + 60) {
+            liveCount++;
+            this.ctx.save();
+            this.ctx.translate(p.x, p.y);
+            this.ctx.rotate((p.rotation * Math.PI) / 180);
+            this.ctx.fillStyle = p.color;
+            this.ctx.globalAlpha = Math.max(0, p.opacity);
+            this.ctx.fillRect(-p.size / 2, -p.size / 2, p.size, p.size * 1.4);
+            this.ctx.restore();
+          }
+        }
+
+        if (liveCount > 0) {
+          requestAnimationFrame(() => this.animate());
+        } else {
+          this.active = false;
+          this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+        }
+      }
+    }
+
+    const confettiEngine = new CanvasConfetti('confetti-canvas');
+
+    /* =========================================================
+       3. LEVEL CONFIGURATIONS & GAME STATE
+       ========================================================= */
+    const GRID_SIZE = 5;
+    const MAX_COMMANDS = 16;
+
+    // Directions: 0 = Norte (Arriba), 1 = Este (Derecha), 2 = Sur (Abajo), 3 = Oeste (Izquierda)
+    const DIR_DELTAS = [
+      { r: -1, c: 0 },  // 0: Norte (dr = -1)
+      { r: 0, c: 1 },   // 1: Este  (dc = +1)
+      { r: 1, c: 0 },   // 2: Sur   (dr = +1)
+      { r: 0, c: -1 },  // 3: Oeste (dc = -1)
+    ];
+
+    const LEVELS = [
+      {
+        id: 1,
+        title: "Nivel 1: Línea Recta",
+        difficulty: "Inicial",
+        icon: "🌱",
+        desc: "Tu primera misión: Diseña una secuencia para que el robot avance en línea recta hasta la batería 🔋.",
+        start: { r: 4, c: 2, dir: 0 }, // Fila 4, Col 2, mirando al Norte
+        goal: { r: 1, c: 2 },
+        obstacles: []
+      },
+      {
+        id: 2,
+        title: "Nivel 2: La Primera Curva",
+        difficulty: "Intermedio",
+        icon: "⚡",
+        desc: "¡Una caja bloquea el camino directo! Usa los giros para rodear el obstáculo y recargar.",
+        start: { r: 4, c: 1, dir: 0 }, // Fila 4, Col 1, mirando al Norte
+        goal: { r: 1, c: 3 },
+        obstacles: [
+          { r: 2, c: 1 }
+        ]
+      },
+      {
+        id: 3,
+        title: "Nivel 3: El Almacén de Cajas",
+        difficulty: "Avanzado",
+        icon: "📦",
+        desc: "¡Múltiples obstáculos! Piensa cuidadosamente la secuencia de giros y avances para no estrellarte.",
+        start: { r: 4, c: 0, dir: 0 }, // Fila 4, Col 0, mirando al Norte
+        goal: { r: 0, c: 4 },
+        obstacles: [
+          { r: 2, c: 0 },
+          { r: 2, c: 1 },
+          { r: 2, c: 2 },
+          { r: 1, c: 3 },
+          { r: 4, c: 3 }
+        ]
+      },
+      {
+        id: 4,
+        title: "Nivel 4: El Gran Maestro",
+        difficulty: "Desafío Final",
+        icon: "🏆",
+        desc: "¡El laberinto definitivo! Demuestra tu dominio programando una secuencia impecable hasta la meta.",
+        start: { r: 4, c: 4, dir: 3 }, // Fila 4, Col 4, mirando al Oeste
+        goal: { r: 0, c: 0 },
+        obstacles: [
+          { r: 3, c: 4 },
+          { r: 3, c: 3 },
+          { r: 3, c: 2 },
+          { r: 1, c: 1 },
+          { r: 1, c: 2 },
+          { r: 1, c: 3 },
+          { r: 2, c: 1 }
+        ]
+      }
+    ];
+
+    let currentLevelIndex = 0;
+    let commands = [];
+    let isRunning = false;
+    let stopRequested = false;
+    let stepSpeedMs = 550;
+
+    // Robot dynamic kinematics
+    let robotPos = { r: 0, c: 0, dir: 0, visualAngle: 0 };
+    let visitedTiles = new Set();
+
+    /* =========================================================
+       4. GRID & BOARD RENDERING
+       ========================================================= */
+    function initGame() {
+      buildGridDOM();
+      loadLevel(0);
+    }
+
+    function buildGridDOM() {
+      const container = document.getElementById('grid-container');
+      container.innerHTML = '';
+
+      for (let r = 0; r < GRID_SIZE; r++) {
+        for (let c = 0; c < GRID_SIZE; c++) {
+          const cell = document.createElement('div');
+          cell.id = `cell-${r}-${c}`;
+          cell.className = 'w-full h-full rounded-xl cell-tech border border-slate-800/90 flex items-center justify-center relative transition-all duration-300';
+          
+          // Subtle grid coordinate watermark
+          const coord = document.createElement('span');
+          coord.className = 'absolute bottom-0.5 right-1 text-[8px] font-mono text-slate-700/60 pointer-events-none';
+          coord.innerText = `${r},${c}`;
+          cell.appendChild(coord);
+
+          // Content Layer (Battery or Obstacle)
+          const content = document.createElement('div');
+          content.id = `content-${r}-${c}`;
+          content.className = 'w-full h-full flex items-center justify-center text-xl sm:text-2xl pointer-events-none select-none';
+          cell.appendChild(content);
+
+          container.appendChild(cell);
+        }
+      }
+    }
+
+    function loadLevel(index) {
+      if (isRunning) return;
+      currentLevelIndex = index;
+      const lvl = LEVELS[currentLevelIndex];
+
+      // Update Header Navigation Tabs
+      for (let i = 1; i <= LEVELS.length; i++) {
+        const tab = document.getElementById(`tab-lvl-${i}`);
+        if (tab) {
+          if (i - 1 === index) {
+            tab.className = "px-2 sm:px-2.5 py-1 rounded-lg transition-all bg-cyan-600 text-white shadow-sm font-bold";
+          } else {
+            tab.className = "px-2 sm:px-2.5 py-1 rounded-lg transition-all text-slate-400 hover:text-slate-200 font-bold";
+          }
+        }
+      }
+
+      // Update Mission Card Info
+      document.getElementById('level-name').innerText = lvl.title;
+      document.getElementById('level-desc').innerText = lvl.desc;
+      document.getElementById('level-difficulty').innerText = `Dificultad: ${lvl.difficulty}`;
+      document.getElementById('level-icon').innerText = lvl.icon;
+
+      // Reset Timeline
+      commands = [];
+      updateTimelineUI();
+
+      // Reset Board Elements
+      resetBoardTiles();
+      resetRobotToStart();
+      setStatus("Esperando instrucciones", "cyan");
+    }
+
+    function selectLevel(lvlNum) {
+      if (isRunning) return;
+      loadLevel(lvlNum - 1);
+    }
+
+    function resetBoardTiles() {
+      const lvl = LEVELS[currentLevelIndex];
+
+      // Reset all cells to clean state
+      for (let r = 0; r < GRID_SIZE; r++) {
+        for (let c = 0; c < GRID_SIZE; c++) {
+          const contentEl = document.getElementById(`content-${r}-${c}`);
+          const cellEl = document.getElementById(`cell-${r}-${c}`);
+          contentEl.innerHTML = '';
+          cellEl.className = 'w-full h-full rounded-xl cell-tech border border-slate-800/90 flex items-center justify-center relative transition-all duration-300';
+          
+          // Remove old trail dots
+          const oldDots = cellEl.querySelectorAll('.trail-dot');
+          oldDots.forEach(d => d.remove());
+        }
+      }
+
+      // Render Goal Target (Quantum Battery 🔋)
+      const goalEl = document.getElementById(`content-${lvl.goal.r}-${lvl.goal.c}`);
+      const goalCell = document.getElementById(`cell-${lvl.goal.r}-${lvl.goal.c}`);
+      goalEl.innerHTML = `
+        <div class="relative flex items-center justify-center w-full h-full">
+          <div class="absolute inset-1 rounded-xl bg-emerald-500/15 border-2 border-dashed border-emerald-400/80 animate-pulse-glow"></div>
+          <span class="text-2xl sm:text-3xl filter drop-shadow-[0_0_10px_#10B981]">🔋</span>
+        </div>
+      `;
+      goalCell.classList.add('bg-emerald-950/20');
+
+      // Render Obstacles (Supply Crates 📦)
+      lvl.obstacles.forEach(obs => {
+        const obsEl = document.getElementById(`content-${obs.r}-${obs.c}`);
+        const obsCell = document.getElementById(`cell-${obs.r}-${obs.c}`);
+        obsEl.innerHTML = `
+          <div class="relative flex items-center justify-center w-full h-full">
+            <span class="text-2xl sm:text-3xl filter drop-shadow-[0_2px_4px_rgba(0,0,0,0.9)]">📦</span>
+          </div>
+        `;
+        obsCell.classList.add('bg-amber-950/20', 'border-amber-700/50');
+      });
+
+      visitedTiles.clear();
+    }
+
+    function resetRobotToStart() {
+      if (isRunning) return;
+      const lvl = LEVELS[currentLevelIndex];
+      robotPos = {
+        r: lvl.start.r,
+        c: lvl.start.c,
+        dir: lvl.start.dir,
+        visualAngle: lvl.start.dir * 90
+      };
+      
+      // Clean previous path dots
+      for (let r = 0; r < GRID_SIZE; r++) {
+        for (let c = 0; c < GRID_SIZE; c++) {
+          const cellEl = document.getElementById(`cell-${r}-${c}`);
+          const oldDots = cellEl.querySelectorAll('.trail-dot');
+          oldDots.forEach(d => d.remove());
+        }
+      }
+
+      visitedTiles.clear();
+      updateRobotSpriteTransform();
+      setStatus("Robot listo en la base", "cyan");
+    }
+
+    function updateRobotSpriteTransform() {
+      const sprite = document.getElementById('robot-sprite');
+      const xPercent = robotPos.c * 100;
+      const yPercent = robotPos.r * 100;
+
+      sprite.style.transform = `translate(${xPercent}%, ${yPercent}%) rotate(${robotPos.visualAngle}deg)`;
+
+      // Drop faint glowing footprint trail
+      const tileKey = `${robotPos.r}-${robotPos.c}`;
+      const lvl = LEVELS[currentLevelIndex];
+      if (!visitedTiles.has(tileKey)) {
+        visitedTiles.add(tileKey);
+        const cell = document.getElementById(`cell-${robotPos.r}-${robotPos.c}`);
+        if (cell && (robotPos.r !== lvl.goal.r || robotPos.c !== lvl.goal.c)) {
+          const dot = document.createElement('div');
+          dot.className = 'trail-dot w-2 h-2 rounded-full bg-cyan-400/60 shadow-[0_0_6px_#00F0FF] absolute top-1.5 left-1.5 pointer-events-none animate-ping';
+          cell.appendChild(dot);
+          setTimeout(() => dot.classList.remove('animate-ping'), 500);
+        }
+      }
+    }
+
+    /* =========================================================
+       5. COMMAND PALETTE & TIMELINE MANAGEMENT
+       ========================================================= */
+    const COMMAND_DICTIONARY = {
+      'forward': {
+        icon: '⬆️',
+        label: 'Avanzar',
+        colorClass: 'border-emerald-500/70 bg-emerald-950/50 text-emerald-300'
+      },
+      'turn-left': {
+        icon: '↺',
+        label: 'Girar Izq.',
+        colorClass: 'border-purple-500/70 bg-purple-950/50 text-purple-300'
+      },
+      'turn-right': {
+        icon: '↻',
+        label: 'Girar Der.',
+        colorClass: 'border-yellow-500/70 bg-yellow-950/50 text-yellow-300'
+      }
+    };
+
+    function addCommand(cmdType) {
+      if (isRunning) return;
+
+      if (commands.length >= MAX_COMMANDS) {
+        setStatus(`Límite alcanzado (${MAX_COMMANDS} bloques máx)`, 'amber');
+        synth.playBug();
+        return;
+      }
+
+      commands.push(cmdType);
+      synth.playAddNote(commands.length - 1);
+      updateTimelineUI();
+      setStatus(`Bloque añadido (${commands.length}/${MAX_COMMANDS})`, 'cyan');
+    }
+
+    function removeLastCommand() {
+      if (isRunning || commands.length === 0) return;
+      commands.pop();
+      synth.playRemoveNote();
+      updateTimelineUI();
+      setStatus(`Bloque eliminado (${commands.length}/${MAX_COMMANDS})`, 'slate');
+    }
+
+    function removeCommandAt(index) {
+      if (isRunning) return;
+      commands.splice(index, 1);
+      synth.playRemoveNote();
+      updateTimelineUI();
+    }
+
+    function clearCommands() {
+      if (isRunning || commands.length === 0) return;
+      commands = [];
+      synth.playRemoveNote();
+      updateTimelineUI();
+      setStatus("Secuencia vacía", "slate");
+    }
+
+    function updateTimelineUI() {
+      const container = document.getElementById('timeline-container');
+      const countEl = document.getElementById('instruction-count');
+
+      countEl.innerText = `${commands.length} / ${MAX_COMMANDS} bloques`;
+
+      if (commands.length === 0) {
+        container.innerHTML = `
+          <div class="w-full text-center py-2 text-xs text-slate-500 italic flex items-center justify-center gap-1.5 select-none">
+            <span>👇 Presiona los botones de abajo para armar la secuencia paso a paso</span>
+          </div>
+        `;
+        return;
+      }
+
+      container.innerHTML = '';
+
+      commands.forEach((cmd, idx) => {
+        const meta = COMMAND_DICTIONARY[cmd];
+        const block = document.createElement('div');
+        block.id = `block-${idx}`;
+        block.onclick = () => removeCommandAt(idx);
+        block.title = "Toca para quitar este paso";
+        block.className = `flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-xl border-2 ${meta.colorClass} cursor-pointer transition-all hover:opacity-80 active:scale-95 text-xs font-semibold select-none group shadow-md`;
+
+        block.innerHTML = `
+          <span class="text-[10px] font-mono text-slate-400 group-hover:text-red-400">${idx + 1}.</span>
+          <span class="text-sm">${meta.icon}</span>
+          <span class="whitespace-nowrap">${meta.label}</span>
+          <span class="text-[10px] text-slate-400 group-hover:text-red-400 ml-0.5">✕</span>
+        `;
+
+        container.appendChild(block);
+      });
+
+      // Auto-scroll timeline to end so player sees their additions
+      container.scrollLeft = container.scrollWidth;
+    }
+
+    /* =========================================================
+       6. CODE EXECUTION ENGINE (Step-by-Step with Animated Delay)
+       ========================================================= */
+    function handleRunButton() {
+      if (isRunning) {
+        // Player clicked STOP during execution
+        stopRequested = true;
+        setStatus("Deteniendo ejecución...", "amber");
+      } else {
+        executeProgram();
+      }
+    }
+
+    async function executeProgram() {
+      if (isRunning) return;
+
+      if (commands.length === 0) {
+        setStatus("¡Agrega al menos una instrucción!", "amber");
+        synth.playBug();
+        return;
+      }
+
+      // Lock UI into running state
+      isRunning = true;
+      stopRequested = false;
+      setExecutionMode(true);
+      resetBoardTiles();
+      resetRobotToStart();
+      setStatus("Ejecutando algoritmo...", "cyan");
+
+      const lvl = LEVELS[currentLevelIndex];
+
+      // Step-by-step execution loop
+      for (let i = 0; i < commands.length; i++) {
+        if (stopRequested) {
+          unhighlightBlocks();
+          setStatus("Ejecución detenida por el usuario", "amber");
+          finishExecution();
+          return;
+        }
+
+        const cmd = commands[i];
+
+        // Highlight active block in timeline
+        highlightBlock(i);
+
+        // Execute Command
+        if (cmd === 'turn-left') {
+          robotPos.dir = (robotPos.dir + 3) % 4; // -90 deg
+          robotPos.visualAngle -= 90;
+          synth.playTurn();
+          updateRobotSpriteTransform();
+        } else if (cmd === 'turn-right') {
+          robotPos.dir = (robotPos.dir + 1) % 4; // +90 deg
+          robotPos.visualAngle += 90;
+          synth.playTurn();
+          updateRobotSpriteTransform();
+        } else if (cmd === 'forward') {
+          const delta = DIR_DELTAS[robotPos.dir];
+          const nextR = robotPos.r + delta.r;
+          const nextC = robotPos.c + delta.c;
+
+          // Check 1: Out of Bounds (Wall Collision)
+          if (nextR < 0 || nextR >= GRID_SIZE || nextC < 0 || nextC >= GRID_SIZE) {
+            synth.playBug();
+            showBugModal(
+              "¡Salida del Tablero!",
+              `En el <strong>paso ${i + 1} (${COMMAND_DICTIONARY[cmd].label})</strong>, el robot intentó salirse del mapa (${nextR}, ${nextC}).<br><br>` +
+              `El robot no tiene sensores para frenar solo: ¡obedece ciegamente cada paso que le das!`
+            );
+            unhighlightBlocks();
+            finishExecution();
+            return;
+          }
+
+          // Check 2: Obstacle Collision (Box Collision)
+          const hitObstacle = lvl.obstacles.find(o => o.r === nextR && o.c === nextC);
+          if (hitObstacle) {
+            // Move partially to show crash location
+            robotPos.r = nextR;
+            robotPos.c = nextC;
+            updateRobotSpriteTransform();
+            synth.playBug();
+            showBugModal(
+              "¡Colisión con Obstáculo!",
+              `En el <strong>paso ${i + 1}</strong>, el robot chocó de frente con una caja 📦 en la casilla (${nextR}, ${nextC}).<br><br>` +
+              `Como programador, debes anticipar los obstáculos y girar antes de avanzar.`
+            );
+            unhighlightBlocks();
+            finishExecution();
+            return;
+          }
+
+          // Valid Movement
+          robotPos.r = nextR;
+          robotPos.c = nextC;
+          synth.playMove();
+          updateRobotSpriteTransform();
+
+          // Check 3: Goal Reached (Battery Captured!)
+          if (robotPos.r === lvl.goal.r && robotPos.c === lvl.goal.c) {
+            unhighlightBlocks();
+            await sleep(stepSpeedMs * 0.7);
+            handleVictory(i + 1);
+            finishExecution();
+            return;
+          }
+        }
+
+        // Delay between steps for pedagogical observation
+        await sleep(stepSpeedMs);
+      }
+
+      unhighlightBlocks();
+
+      // If finished all commands without reaching battery
+      if (robotPos.r !== lvl.goal.r || robotPos.c !== lvl.goal.c) {
+        synth.playBug();
+        showBugModal(
+          "¡Secuencia Incompleta!",
+          `El robot ejecutó todas las instrucciones (${commands.length} pasos) pero <strong>se quedó a mitad de camino</strong> sin alcanzar la batería 🔋.<br><br>` +
+          `¡Tu algoritmo necesita más pasos para completar el recorrido!`
+        );
+      }
+
+      finishExecution();
+    }
+
+    function highlightBlock(index) {
+      unhighlightBlocks();
+      const el = document.getElementById(`block-${index}`);
+      if (el) {
+        el.classList.add('executing-block');
+        el.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+      }
+    }
+
+    function unhighlightBlocks() {
+      const active = document.querySelectorAll('.executing-block');
+      active.forEach(el => el.classList.remove('executing-block'));
+    }
+
+    function setExecutionMode(running) {
+      const runBtn = document.getElementById('run-btn');
+      const runIcon = document.getElementById('run-btn-icon');
+      const runLabel = document.getElementById('run-btn-label');
+      const actionButtons = document.querySelectorAll('.cmd-btn, #btn-delete, #btn-clear');
+
+      if (running) {
+        // Change run CTA to stop button
+        runBtn.className = "w-full sm:flex-1 py-3 sm:py-3.5 px-4 sm:px-6 rounded-xl bg-red-600 hover:bg-red-500 text-white font-black text-sm sm:text-base tracking-wide uppercase shadow-lg shadow-red-600/40 flex items-center justify-center gap-2 transition-all active:scale-95 cursor-pointer";
+        runIcon.innerText = "⏹️";
+        runLabel.innerText = "DETENER EJECUCIÓN";
+        actionButtons.forEach(btn => btn.setAttribute('disabled', 'true'));
+      } else {
+        // Restore run CTA
+        runBtn.className = "w-full sm:flex-1 py-3 sm:py-3.5 px-4 sm:px-6 rounded-xl bg-gradient-to-r from-cyan-500 via-teal-400 to-emerald-500 hover:from-cyan-400 hover:to-emerald-400 text-slate-950 font-black text-sm sm:text-base tracking-wide uppercase shadow-lg shadow-cyan-500/30 flex items-center justify-center gap-2 transition-all active:scale-95 cursor-pointer";
+        runIcon.innerText = "🚀";
+        runLabel.innerText = "¡EJECUTAR CÓDIGO!";
+        actionButtons.forEach(btn => btn.removeAttribute('disabled'));
+      }
+    }
+
+    function finishExecution() {
+      isRunning = false;
+      stopRequested = false;
+      setExecutionMode(false);
+    }
+
+    function sleep(ms) {
+      return new Promise(resolve => setTimeout(resolve, ms));
+    }
+
+    function setSpeed(ms) {
+      stepSpeedMs = ms;
+      document.getElementById('spd-1').className = ms === 550 ? "px-2.5 py-1 rounded-lg bg-cyan-700 text-white font-bold transition-all" : "px-2.5 py-1 rounded-lg text-slate-400 hover:text-white font-bold transition-all";
+      document.getElementById('spd-2').className = ms === 300 ? "px-2.5 py-1 rounded-lg bg-cyan-700 text-white font-bold transition-all" : "px-2.5 py-1 rounded-lg text-slate-400 hover:text-white font-bold transition-all";
+    }
+
+    /* =========================================================
+       7. STATUS & MODAL CONTROLLERS
+       ========================================================= */
+    function setStatus(text, color = 'cyan') {
+      const pill = document.getElementById('status-pill');
+      const label = document.getElementById('status-text');
+      label.innerText = text;
+
+      if (color === 'amber') {
+        pill.className = "flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold bg-amber-950/70 border border-amber-800/80 text-amber-300 shadow-sm";
+      } else if (color === 'red') {
+        pill.className = "flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold bg-red-950/70 border border-red-800/80 text-red-300 shadow-sm";
+      } else if (color === 'emerald') {
+        pill.className = "flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-950/70 border border-emerald-800/80 text-emerald-300 shadow-sm";
+      } else {
+        pill.className = "flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold bg-cyan-950/70 border border-cyan-800/80 text-cyan-300 shadow-sm";
+      }
+    }
+
+    function toggleModal(id, show) {
+      const modal = document.getElementById(id);
+      if (show) {
+        modal.classList.remove('hidden');
+      } else {
+        modal.classList.add('hidden');
+      }
+    }
+
+    function showBugModal(title, message) {
+      setStatus("Bug Detectado", "red");
+      document.getElementById('bug-title').innerText = title;
+      document.getElementById('bug-explanation').innerHTML = message;
+      toggleModal('bug-modal', true);
+    }
+
+    function dismissBugModal() {
+      toggleModal('bug-modal', false);
+      resetBoardTiles();
+      resetRobotToStart();
+      setStatus("Secuencia lista para depurar", "cyan");
+    }
+
+    function handleVictory(stepsTaken) {
+      setStatus("¡Misión Cumplida!", "emerald");
+      synth.playVictory();
+      confettiEngine.burst();
+
+      document.getElementById('win-step-count').innerText = `${stepsTaken} pasos`;
+      
+      const nextBtn = document.getElementById('next-level-btn');
+      if (currentLevelIndex >= LEVELS.length - 1) {
+        nextBtn.innerHTML = `<span>¡Completaste Todo el Juego! 🏆</span>`;
+      } else {
+        nextBtn.innerHTML = `<span>Siguiente Nivel</span> <span>➡️</span>`;
+      }
+
+      toggleModal('win-modal', true);
+    }
+
+    function nextLevel() {
+      toggleModal('win-modal', false);
+      if (currentLevelIndex < LEVELS.length - 1) {
+        loadLevel(currentLevelIndex + 1);
+      } else {
+        // Wrap around to level 1 for endless science fair replay
+        loadLevel(0);
+      }
+    }
+
+    function replayCurrentLevel() {
+      toggleModal('win-modal', false);
+      resetBoardTiles();
+      resetRobotToStart();
+      setStatus("Listo para intentar de nuevo", "cyan");
+    }
+
+    // Launch Game on Document Load
+    window.addEventListener('DOMContentLoaded', initGame);
+  </script>
+</body>
+</html>
